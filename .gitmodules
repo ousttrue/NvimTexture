@@ -4,3 +4,6 @@
 [submodule "_external/imgui/imgui"]
 	path = _external/imgui/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "_external/plog/plog"]
+	path = _external/plog/plog
+	url = https://github.com/SergiusTheBest/plog.git
