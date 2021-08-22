@@ -72,3 +72,7 @@ bool NvimPipe::Launch(const char *command) {
 
   return true;
 }
+
+void *NvimPipe::ReadHandle() { return _impl->ReadHandle(); }
+
+void *NvimPipe::WriteHandle() { return _impl->WriteHandle(); }

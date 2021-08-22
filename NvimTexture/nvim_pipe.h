@@ -8,4 +8,6 @@ public:
   NvimPipe();
   ~NvimPipe();
   bool Launch(const char *command);
+  void* ReadHandle();
+  void* WriteHandle();
 };

@@ -3,13 +3,19 @@
 // the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
+#include <asio.hpp>
+#include <d3d11.h>
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
+#include <iostream>
+#include <msgpack_rpc.h>
+#include <msgpackpp.h>
 #include <nvim_pipe.h>
-#include <d3d11.h>
 #include <tchar.h>
+#include <windows_pipe_transport.h>
 #include <wrl/client.h>
+
 
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -51,12 +57,13 @@ public:
     // Create application window
     // ImGui_ImplWin32_EnableDpiAwareness();
     _wc = {sizeof(WNDCLASSEX),    CS_CLASSDC, WndProc, 0L,   0L,
-          GetModuleHandle(NULL), NULL,       NULL,    NULL, NULL,
-          _T("ImGui Example"),   NULL};
+           GetModuleHandle(NULL), NULL,       NULL,    NULL, NULL,
+           _T("ImGui Example"),   NULL};
     ::RegisterClassEx(&_wc);
-    _hwnd = ::CreateWindow(_wc.lpszClassName, _T("Dear ImGui DirectX11 Example"),
-                          WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL,
-                          _wc.hInstance, NULL);
+    _hwnd =
+        ::CreateWindow(_wc.lpszClassName, _T("Dear ImGui DirectX11 Example"),
+                       WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL,
+                       _wc.hInstance, NULL);
 
     return _hwnd;
   }
@@ -120,13 +127,13 @@ public:
       ComPtr<ID3D11Texture2D> pBackBuffer;
       _pSwapChain->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
       _pd3dDevice->CreateRenderTargetView(pBackBuffer.Get(), NULL,
-                                           &_mainRenderTargetView);
+                                          &_mainRenderTargetView);
     }
 
     _pd3dDeviceContext->OMSetRenderTargets(
         1, _mainRenderTargetView.GetAddressOf(), NULL);
     _pd3dDeviceContext->ClearRenderTargetView(_mainRenderTargetView.Get(),
-                                               clear_color_with_alpha);
+                                              clear_color_with_alpha);
   }
 
   void Present() {
@@ -246,8 +253,8 @@ public:
       ImGui::Begin(
           "Another Window",
           &_show_another_window); // Pass a pointer to our bool variable (the
-                                 // window will have a closing button that will
-                                 // clear the bool when clicked)
+                                  // window will have a closing button that will
+                                  // clear the bool when clicked)
       ImGui::Text("Hello from another window!");
       if (ImGui::Button("Close Me"))
         _show_another_window = false;
@@ -269,13 +276,47 @@ public:
 // Main code
 int main(int, char **) {
 
+  //
   // launch nvim
+  //
   NvimPipe nvim;
-  if(!nvim.Launch("nvim --embed"))
-  {
+  if (!nvim.Launch("nvim --embed")) {
     return 3;
   }
 
+  asio::io_context context;
+  asio::io_context::work work(context);
+  std::thread context_thead([&context]() { context.run(); });
+
+  msgpack_rpc::rpc_base<msgpack_rpc::WindowsPipeTransport> rpc;
+  rpc.attach(msgpack_rpc::WindowsPipeTransport(context, nvim.ReadHandle(),
+                                               nvim.WriteHandle()));
+
+  {
+    auto result = rpc.request("nvim_get_api_info").get();
+    std::cout << msgpackpp::parser(result) << std::endl;
+  }
+
+  { rpc.notify("nvim_set_var", "nvy", 1); }
+
+  {
+    auto result = rpc.request("nvim_eval", "stdpath('config')").get();
+    std::cout << msgpackpp::parser(result) << std::endl;
+  }
+
+  {
+    msgpackpp::packer args;
+    args.pack_array(2);
+    args << 190;
+    args << 45;
+    args.pack_map(1);
+    args << "ext_linegrid" << true;
+    rpc.notify_raw("nvim_ui_attach", args.get_payload());
+  }
+
+  //
+  // create window
+  //
   Win32Window window;
   auto hwnd = window.Create();
   if (!hwnd) {
@@ -323,6 +364,9 @@ int main(int, char **) {
     gui.Render();
     d3d.Present();
   }
+
+  context.stop();
+  context_thead.join();
 
   return 0;
 }
