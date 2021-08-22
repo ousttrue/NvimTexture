@@ -12,10 +12,13 @@
 #include <msgpack_rpc.h>
 #include <msgpackpp.h>
 #include <nvim_pipe.h>
+#include <plog/Appenders/DebugOutputAppender.h>
+#include <plog/Formatters/TxtFormatter.h>
+#include <plog/Init.h>
+#include <plog/Log.h>
 #include <tchar.h>
 #include <windows_pipe_transport.h>
 #include <wrl/client.h>
-
 
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -275,6 +278,8 @@ public:
 
 // Main code
 int main(int, char **) {
+  static plog::DebugOutputAppender<plog::TxtFormatter> debugOutputAppender;
+  plog::init(plog::verbose, &debugOutputAppender);
 
   //
   // launch nvim
@@ -289,29 +294,42 @@ int main(int, char **) {
   std::thread context_thead([&context]() { context.run(); });
 
   msgpack_rpc::rpc_base<msgpack_rpc::WindowsPipeTransport> rpc;
+  rpc.set_on_error([](msgpack_rpc::error_code ec) {
+    //
+    PLOGE << "[rpc_error]" << (int)ec;
+  });
+  rpc.set_on_send([](const std::vector<uint8_t> &data) {
+    msgpackpp::parser msg(data);
+    PLOGD << "=> " << msg;
+  });
+  rpc.set_on_msg([](const msgpackpp::parser &msg) {
+    switch (msg[0].get_number<int>()) {
+    case 0:
+      PLOGD << "<= (request) " << msg;
+      break;
+
+    case 1:
+      PLOGD << "<= (response) " << msg[1].get_number<int>();
+      break;
+
+    case 2:
+      PLOGD << "<= (notify) " << msg[1].get_string();
+      break;
+    }
+  });
   rpc.attach(msgpack_rpc::WindowsPipeTransport(context, nvim.ReadHandle(),
                                                nvim.WriteHandle()));
 
   {
     auto result = rpc.request("nvim_get_api_info").get();
-    std::cout << msgpackpp::parser(result) << std::endl;
+    // std::cout << msgpackpp::parser(result) << std::endl;
   }
 
   { rpc.notify("nvim_set_var", "nvy", 1); }
 
   {
     auto result = rpc.request("nvim_eval", "stdpath('config')").get();
-    std::cout << msgpackpp::parser(result) << std::endl;
-  }
-
-  {
-    msgpackpp::packer args;
-    args.pack_array(2);
-    args << 190;
-    args << 45;
-    args.pack_map(1);
-    args << "ext_linegrid" << true;
-    rpc.notify_raw("nvim_ui_attach", args.get_payload());
+    // std::cout << msgpackpp::parser(result) << std::endl;
   }
 
   //
@@ -333,6 +351,21 @@ int main(int, char **) {
   ::UpdateWindow(hwnd);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
+
+  // start rendering
+  {
+    msgpackpp::packer args;
+    args.pack_array(3);
+    args << 190;
+    args << 45;
+    args.pack_map(0);
+    // args << "ext_linegrid" << true;
+    rpc.notify_raw("nvim_ui_attach", args.get_payload());
+  }
+
+  {
+    rpc.notify("nvim_ui_try_resize", 190, 45);
+  }
 
   // Main loop
   bool done = false;

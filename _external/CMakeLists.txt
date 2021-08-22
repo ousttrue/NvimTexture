@@ -1,1 +1,1 @@
-subdirs(imgui msgpack-rpc-asio)
+subdirs(imgui msgpack-rpc-asio plog)
