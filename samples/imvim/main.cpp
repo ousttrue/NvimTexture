@@ -3,9 +3,10 @@
 // the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
-#include "imgui.h"
-#include "imgui_impl_dx11.h"
-#include "imgui_impl_win32.h"
+#include <imgui.h>
+#include <imgui_impl_dx11.h>
+#include <imgui_impl_win32.h>
+#include <nvim_pipe.h>
 #include <d3d11.h>
 #include <tchar.h>
 #include <wrl/client.h>
@@ -267,6 +268,13 @@ public:
 
 // Main code
 int main(int, char **) {
+
+  // launch nvim
+  NvimPipe nvim;
+  if(!nvim.Launch("nvim --embed"))
+  {
+    return 3;
+  }
 
   Win32Window window;
   auto hwnd = window.Create();
