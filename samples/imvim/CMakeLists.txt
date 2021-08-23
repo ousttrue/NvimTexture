@@ -6,6 +6,5 @@ target_link_libraries(
           d3d11
           NvimTexture
           asio
-          msgpack-rpc-asio
           msgpackpp
           plog)

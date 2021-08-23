@@ -4,3 +4,6 @@
 [submodule "_external/plog/plog"]
 	path = _external/plog/plog
 	url = https://github.com/SergiusTheBest/plog.git
+[submodule "_external/msgpackpp/msgpackpp"]
+	path = _external/msgpackpp/msgpackpp
+	url = https://github.com/ousttrue/msgpackpp.git
