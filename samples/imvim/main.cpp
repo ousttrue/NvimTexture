@@ -13,6 +13,7 @@
 #include <msgpackpp/rpc.h>
 #include <msgpackpp/windows_pipe_transport.h>
 #include <nvim_pipe.h>
+#include <nvim_renderer.h>
 #include <plog/Appenders/DebugOutputAppender.h>
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Init.h>
@@ -352,23 +353,21 @@ int main(int, char **) {
   ::UpdateWindow(hwnd);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
+  NvimRenderer renderer;
 
-  msgpackpp::rpc redraw;
-  rpc.add_proc("redraw",
-               [&redraw](const msgpackpp::parser &args) -> msgpackpp::bytes {
-                 //
-                 auto count = args.count().value;
-                 auto arg = args.first_array_item().value;
-                 for (uint32_t i = 0; i < count; ++i, arg = arg.next()) {
-                   auto name = arg[0].get_string();
-                   auto result = redraw.dispatch(name, arg[1]);
-                   if (!result.is_ok()) {
-                     PLOGD << "[redraw][error]" << name << ": " << (int)result.status;
-                   }
-                 }
 
-                 return {};
-               });
+  rpc.add_proc(
+      "redraw", [&renderer](const msgpackpp::parser &commands) -> msgpackpp::bytes {
+        //
+        assert(commands.is_array());
+        auto count = commands.count().value;
+        auto command = commands.first_array_item().value;
+        for (uint32_t i = 0; i < count; ++i, command = command.next()) {
+          renderer.dispatch(command);
+        }
+
+        return {};
+      });
 
   // start rendering
   {
@@ -376,8 +375,8 @@ int main(int, char **) {
     args.pack_array(3);
     args << 190;
     args << 45;
-    args.pack_map(0);
-    // args << "ext_linegrid" << true;
+    args.pack_map(1);
+    args << "ext_linegrid" << true;
     rpc.notify_raw("nvim_ui_attach", args.get_payload());
   }
 
