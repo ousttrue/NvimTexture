@@ -20,7 +20,6 @@
 #include <tchar.h>
 #include <wrl/client.h>
 
-
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 // Forward declare message handler from imgui_impl_win32.cpp
@@ -295,10 +294,11 @@ int main(int, char **) {
   std::thread context_thead([&context]() { context.run(); });
 
   msgpackpp::rpc_base<msgpackpp::WindowsPipeTransport> rpc;
-  rpc.set_on_error([](msgpackpp::error_code ec) {
-    //
-    PLOGE << "[rpc_error]" << (int)ec;
-  });
+  rpc.set_on_rpc_error(
+      [](msgpackpp::rpc_errors ec, const msgpackpp::parser &msg) {
+        //
+        PLOGE << "[rpc_error]" << (int)ec;
+      });
   rpc.set_on_send([](const std::vector<uint8_t> &data) {
     msgpackpp::parser msg(data);
     PLOGD << "=> " << msg;
@@ -322,14 +322,14 @@ int main(int, char **) {
                                              nvim.WriteHandle()));
 
   {
-    auto result = rpc.request("nvim_get_api_info").get();
+    auto result = rpc.request_async("nvim_get_api_info").get();
     // std::cout << msgpackpp::parser(result) << std::endl;
   }
 
   { rpc.notify("nvim_set_var", "nvy", 1); }
 
   {
-    auto result = rpc.request("nvim_eval", "stdpath('config')").get();
+    auto result = rpc.request_async("nvim_eval", "stdpath('config')").get();
     // std::cout << msgpackpp::parser(result) << std::endl;
   }
 
@@ -353,16 +353,22 @@ int main(int, char **) {
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
 
-  rpc.add_proc("redraw", [](const msgpackpp::parser &args) -> msgpackpp::bytes {
-    //
-    auto count = args.count().value;
-    auto item = args.first_array_item().value;
-    for (uint32_t i = 0; i < count; ++i, item = item.next()) {
-      PLOGD << item;
-    }
+  msgpackpp::rpc redraw;
+  rpc.add_proc("redraw",
+               [&redraw](const msgpackpp::parser &args) -> msgpackpp::bytes {
+                 //
+                 auto count = args.count().value;
+                 auto arg = args.first_array_item().value;
+                 for (uint32_t i = 0; i < count; ++i, arg = arg.next()) {
+                   auto name = arg[0].get_string();
+                   auto result = redraw.dispatch(name, arg[1]);
+                   if (!result.is_ok()) {
+                     PLOGD << "[redraw][error]" << name << ": " << (int)result.status;
+                   }
+                 }
 
-    return {};
-  });
+                 return {};
+               });
 
   // start rendering
   {

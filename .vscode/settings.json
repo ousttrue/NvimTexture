@@ -10,6 +10,15 @@
     ],
     "files.associations": {
         "initializer_list": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "atomic": "cpp",
+        "stop_token": "cpp",
+        "system_error": "cpp",
+        "vector": "cpp",
+        "*.ipp": "cpp",
+        "filesystem": "cpp",
+        "future": "cpp",
+        "ostream": "cpp",
+        "xiosbase": "cpp"
     },
 }
