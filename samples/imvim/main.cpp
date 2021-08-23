@@ -319,7 +319,7 @@ int main(int, char **) {
     }
   });
   rpc.attach(msgpackpp::WindowsPipeTransport(context, nvim.ReadHandle(),
-                                               nvim.WriteHandle()));
+                                             nvim.WriteHandle()));
 
   {
     auto result = rpc.request("nvim_get_api_info").get();
@@ -352,6 +352,12 @@ int main(int, char **) {
   ::UpdateWindow(hwnd);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
+
+  rpc.add_proc("redraw", [](const msgpackpp::parser &args) -> msgpackpp::bytes {
+    //
+    PLOGD << args;
+    return {};
+  });
 
   // start rendering
   {
