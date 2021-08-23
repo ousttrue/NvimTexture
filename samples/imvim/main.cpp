@@ -355,7 +355,12 @@ int main(int, char **) {
 
   rpc.add_proc("redraw", [](const msgpackpp::parser &args) -> msgpackpp::bytes {
     //
-    PLOGD << args;
+    auto count = args.count().value;
+    auto item = args.first_array_item().value;
+    for (uint32_t i = 0; i < count; ++i, item = item.next()) {
+      PLOGD << item;
+    }
+
     return {};
   });
 
