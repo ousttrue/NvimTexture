@@ -5,6 +5,4 @@ target_link_libraries(
   PRIVATE imgui
           d3d11
           NvimTexture
-          asio
-          msgpackpp
           plog)

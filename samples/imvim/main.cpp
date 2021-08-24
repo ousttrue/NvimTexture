@@ -3,17 +3,11 @@
 // the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
-#include <asio.hpp>
 #include <d3d11.h>
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
-#include <iostream>
-#include <msgpackpp/msgpackpp.h>
-#include <msgpackpp/rpc.h>
-#include <msgpackpp/windows_pipe_transport.h>
-#include <nvim_pipe.h>
-#include <nvim_renderer.h>
+#include <nvim_frontend.h>
 #include <plog/Appenders/DebugOutputAppender.h>
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Init.h>
@@ -285,53 +279,9 @@ int main(int, char **) {
   //
   // launch nvim
   //
-  NvimPipe nvim;
-  if (!nvim.Launch("nvim --embed")) {
+  NvimFrontend nvim;
+  if (!nvim.Launch()) {
     return 3;
-  }
-
-  asio::io_context context;
-  asio::io_context::work work(context);
-  std::thread context_thead([&context]() { context.run(); });
-
-  msgpackpp::rpc_base<msgpackpp::WindowsPipeTransport> rpc;
-  rpc.set_on_rpc_error(
-      [](msgpackpp::rpc_errors ec, const msgpackpp::parser &msg) {
-        //
-        PLOGE << "[rpc_error]" << (int)ec;
-      });
-  rpc.set_on_send([](const std::vector<uint8_t> &data) {
-    msgpackpp::parser msg(data);
-    PLOGD << "=> " << msg;
-  });
-  rpc.set_on_msg([](const msgpackpp::parser &msg) {
-    switch (msg[0].get_number<int>()) {
-    case 0:
-      PLOGD << "<= (request) " << msg;
-      break;
-
-    case 1:
-      PLOGD << "<= (response) " << msg[1].get_number<int>();
-      break;
-
-    case 2:
-      PLOGD << "<= (notify) " << msg[1].get_string();
-      break;
-    }
-  });
-  rpc.attach(msgpackpp::WindowsPipeTransport(context, nvim.ReadHandle(),
-                                             nvim.WriteHandle()));
-
-  {
-    auto result = rpc.request_async("nvim_get_api_info").get();
-    // std::cout << msgpackpp::parser(result) << std::endl;
-  }
-
-  { rpc.notify("nvim_set_var", "nvy", 1); }
-
-  {
-    auto result = rpc.request_async("nvim_eval", "stdpath('config')").get();
-    // std::cout << msgpackpp::parser(result) << std::endl;
   }
 
   //
@@ -353,34 +303,8 @@ int main(int, char **) {
   ::UpdateWindow(hwnd);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
-  NvimRenderer renderer;
 
-
-  rpc.add_proc(
-      "redraw", [&renderer](const msgpackpp::parser &commands) -> msgpackpp::bytes {
-        //
-        assert(commands.is_array());
-        auto count = commands.count().value;
-        auto command = commands.first_array_item().value;
-        for (uint32_t i = 0; i < count; ++i, command = command.next()) {
-          renderer.dispatch(command);
-        }
-
-        return {};
-      });
-
-  // start rendering
-  {
-    msgpackpp::packer args;
-    args.pack_array(3);
-    args << 190;
-    args << 45;
-    args.pack_map(1);
-    args << "ext_linegrid" << true;
-    rpc.notify_raw("nvim_ui_attach", args.get_payload());
-  }
-
-  { rpc.notify("nvim_ui_try_resize", 190, 45); }
+  nvim.Attach();
 
   // Main loop
   bool done = false;
@@ -412,9 +336,6 @@ int main(int, char **) {
     gui.Render();
     d3d.Present();
   }
-
-  context.stop();
-  context_thead.join();
 
   return 0;
 }
