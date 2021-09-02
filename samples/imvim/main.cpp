@@ -297,14 +297,15 @@ public:
   }
 };
 
-class Renderer {
+class NvimRendererD2D {
+
   ComPtr<ID3D11Device> _device;
   ComPtr<ID3D11Texture2D> _texture;
   ComPtr<ID3D11ShaderResourceView> _srv;
   D3D11_TEXTURE2D_DESC _desc = {0};
 
 public:
-  Renderer(const ComPtr<ID3D11Device> &device) : _device(device) {}
+  NvimRendererD2D(const ComPtr<ID3D11Device> &device) : _device(device) {}
   ID3D11ShaderResourceView *Render(int w, int h) {
     GetOrCreate(w, h);
     return _srv.Get();
@@ -370,7 +371,7 @@ int main(int, char **) {
   if (!d3d.Create(hwnd)) {
     return 2;
   }
-  Renderer renderer(d3d._pd3dDevice);
+  NvimRendererD2D renderer(d3d._pd3dDevice);
 
   // Show the window
   ::ShowWindow(hwnd, SW_SHOWDEFAULT);
@@ -405,7 +406,7 @@ int main(int, char **) {
     d3d.PrepareBackbuffer(rect.right - rect.left, rect.bottom - rect.top,
                           gui.clear_color_with_alpha);
 
-    gui.Render(std::bind(&Renderer::Render, &renderer, std::placeholders::_1,
+    gui.Render(std::bind(&NvimRendererD2D::Render, &renderer, std::placeholders::_1,
                          std::placeholders::_2));
     d3d.Present();
   }

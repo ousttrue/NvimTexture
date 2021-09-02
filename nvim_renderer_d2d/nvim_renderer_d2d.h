@@ -3,14 +3,14 @@
 
 struct HighlightAttribute;
 class NvimGrid;
-class Renderer : public NvimRenderer {
-  class RendererImpl *_impl = nullptr;
+class NvimRendererD2D : public NvimRenderer {
+  class NvimRendererD2DImpl *_impl = nullptr;
 
 public:
-  Renderer(struct ID3D11Device2 *device, bool disable_ligatures,
+  NvimRendererD2D(struct ID3D11Device2 *device, bool disable_ligatures,
            float linespace_factor, uint32_t monitor_dpi,
            const HighlightAttribute *defaultHL);
-  ~Renderer();
+  ~NvimRendererD2D();
   void SetTarget(struct IDXGISurface2 *backbuffer);
   // font size
   void SetFont(std::string_view font, float size) override;
