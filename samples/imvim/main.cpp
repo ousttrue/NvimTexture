@@ -3,6 +3,7 @@
 // the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
+#include <Windows.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <imgui.h>
@@ -17,6 +18,8 @@
 #include <plog/Log.h>
 #include <tchar.h>
 #include <wrl/client.h>
+//
+#include <nvim_vk_map.h>
 
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
@@ -150,7 +153,7 @@ public:
 using RenderTargetRenderer_t =
     std::function<ID3D11ShaderResourceView *(int w, int h)>;
 
-using Input_t = std::function<void(const InputEvent &e)>;
+using Input_t = std::function<void(const Nvim::InputEvent &e)>;
 
 class Gui {
   // Our state
@@ -213,19 +216,16 @@ public:
 
   bool m_key[512] = {0};
 
-  bool try_get_vk_map(int src, int *dst, bool shift) {
+  const char *my_translate(int src, bool shift) {
     switch (src) {
     case VK_OEM_1:
-      *dst = shift ? ':' : ';';
-      return true;
+      return shift ? ":" : ";";
     case VK_OEM_4:
-      *dst = shift ? '{' : '[';
-      return true;
+      return shift ? "{" : "[";
     case VK_OEM_6:
-      *dst = shift ? '}' : ']';
-      return true;
+      return shift ? "}" : "]";
     }
-    return false;
+    return nullptr;
   }
 
   void Input(const bool key[512], const Input_t &input) {
@@ -241,26 +241,34 @@ public:
         if (value) {
           if (isalpha(i)) {
             if (is_ctrl) {
-              input(InputEvent::create_modified((const char *)&i));
+              input(Nvim::InputEvent::create_modified((const char *)&i));
             } else {
               if (is_shift) {
                 // upper case
-                input(InputEvent::create_char(i));
+                input(Nvim::InputEvent::create_char(i));
               } else {
                 // lower case
-                input(InputEvent::create_char(i + 0x20));
+                input(Nvim::InputEvent::create_char(i + 0x20));
               }
             }
           } else {
 
-            if (try_get_vk_map(i, &i, is_shift)) {
-              if (is_ctrl) {
-                input(InputEvent::create_modified((const char *)&i));
-              } else {
-                input(InputEvent::create_char(i));
-              }
+            if (auto key = Nvim_VK_Map(i, is_ctrl)) {
+              input(Nvim::InputEvent::create_modified(key));
             } else {
-              PLOGD << "key: " << i;
+              auto t = my_translate(i, is_shift);
+              if (t) {
+                if (is_ctrl) {
+                  input(Nvim::InputEvent::create_modified(t));
+                } else {
+                  input(Nvim::InputEvent::create_input(t));
+                }
+              } else {
+                if (i == ' ') {
+                  input(Nvim::InputEvent::create_input(" "));
+                }
+                PLOGD << "key: " << i;
+              }
             }
           }
         }
@@ -382,8 +390,8 @@ public:
     // Attach the renderer now that the window size is determined
     // auto [window_width, window_height] = window.Size();
     auto [font_width, font_height] = _renderer.FontSize();
-    auto gridSize = GridSize::FromWindowSize(640, 640, ceilf(font_width),
-                                             ceilf(font_height));
+    auto gridSize = Nvim::GridSize::FromWindowSize(640, 640, ceilf(font_width),
+                                                   ceilf(font_height));
 
     // nvim_attach_ui. start redraw message
     _nvim.AttachUI(&_renderer, gridSize.rows, gridSize.cols);
@@ -395,8 +403,8 @@ public:
 
     // update nvim gird size
     auto [font_width, font_height] = _renderer.FontSize();
-    auto gridSize =
-        GridSize::FromWindowSize(w, h, ceilf(font_width), ceilf(font_height));
+    auto gridSize = Nvim::GridSize::FromWindowSize(w, h, ceilf(font_width),
+                                                   ceilf(font_height));
     if (_nvim.Sizing()) {
       auto a = 0;
     } else {
@@ -416,7 +424,7 @@ public:
     return _srv.Get();
   }
 
-  void Input(const InputEvent &e) { _nvim.Input(e); }
+  void Input(const Nvim::InputEvent &e) { _nvim.Input(e); }
 
 private:
   void GetOrCreate(int w, int h) {
