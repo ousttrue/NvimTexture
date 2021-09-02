@@ -4,10 +4,13 @@
 // https://github.com/ocornut/imgui/tree/master/docs
 
 #include <d3d11.h>
+#include <dxgi1_2.h>
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 #include <nvim_frontend.h>
+#include <nvim_grid.h>
+#include <nvim_renderer_d2d.h>
 #include <plog/Appenders/DebugOutputAppender.h>
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Init.h>
@@ -95,8 +98,10 @@ public:
     sd.Windowed = TRUE;
     sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
-    UINT createDeviceFlags = 0;
-    // createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT; // require D2D
+#ifndef NDEBUG
+    createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevelArray[2] = {
         D3D_FEATURE_LEVEL_11_0,
@@ -297,17 +302,55 @@ public:
   }
 };
 
-class NvimRendererD2D {
+class Renderer {
 
   ComPtr<ID3D11Device> _device;
   ComPtr<ID3D11Texture2D> _texture;
   ComPtr<ID3D11ShaderResourceView> _srv;
   D3D11_TEXTURE2D_DESC _desc = {0};
 
+  NvimFrontend &_nvim;
+  NvimRendererD2D _renderer;
+
 public:
-  NvimRendererD2D(const ComPtr<ID3D11Device> &device) : _device(device) {}
+  Renderer(NvimFrontend &nvim, const ComPtr<ID3D11Device> &device)
+      : _nvim(nvim), _device(device),
+        _renderer(device.Get(), nvim.DefaultAttribute()) {
+
+    // Attach the renderer now that the window size is determined
+    // auto [window_width, window_height] = window.Size();
+    auto [font_width, font_height] = _renderer.FontSize();
+    auto gridSize = GridSize::FromWindowSize(640, 640, ceilf(font_width),
+                                             ceilf(font_height));
+
+    // nvim_attach_ui. start redraw message
+    _nvim.AttachUI(&_renderer, gridSize.rows, gridSize.cols);
+  }
+
   ID3D11ShaderResourceView *Render(int w, int h) {
+    // update target size
     GetOrCreate(w, h);
+
+    // update nvim gird size
+    auto [font_width, font_height] = _renderer.FontSize();
+    auto gridSize =
+        GridSize::FromWindowSize(w, h, ceilf(font_width), ceilf(font_height));
+    if (_nvim.Sizing()) {
+      auto a = 0;
+    } else {
+      if (_nvim.GridSize() != gridSize) {
+        _nvim.SetSizing();
+        _nvim.ResizeGrid(gridSize.rows, gridSize.cols);
+      }
+    }
+
+    ComPtr<IDXGISurface2> surface;
+    auto hr = _texture.As(&surface);
+    assert(SUCCEEDED(hr));
+    _renderer.SetTarget(surface.Get());
+    _nvim.Process();
+    _renderer.SetTarget(nullptr);
+
     return _srv.Get();
   }
 
@@ -325,7 +368,7 @@ private:
     _desc.Height = h;
     _desc.MipLevels = 1;
     _desc.ArraySize = 1;
-    _desc.Format = DXGI_FORMAT_B8G8R8X8_UNORM;
+    _desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // D2D
     _desc.SampleDesc.Count = 1;
     _desc.SampleDesc.Quality = 0;
     _desc.Usage = D3D11_USAGE_DEFAULT;
@@ -366,16 +409,15 @@ int main(int, char **) {
   if (!hwnd) {
     return 1;
   }
+  // Show the window
+  ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+  ::UpdateWindow(hwnd);
 
   D3DManager d3d;
   if (!d3d.Create(hwnd)) {
     return 2;
   }
-  NvimRendererD2D renderer(d3d._pd3dDevice);
-
-  // Show the window
-  ::ShowWindow(hwnd, SW_SHOWDEFAULT);
-  ::UpdateWindow(hwnd);
+  Renderer renderer(nvim, d3d._pd3dDevice);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
 
@@ -406,7 +448,7 @@ int main(int, char **) {
     d3d.PrepareBackbuffer(rect.right - rect.left, rect.bottom - rect.top,
                           gui.clear_color_with_alpha);
 
-    gui.Render(std::bind(&NvimRendererD2D::Render, &renderer, std::placeholders::_1,
+    gui.Render(std::bind(&Renderer::Render, &renderer, std::placeholders::_1,
                          std::placeholders::_2));
     d3d.Present();
   }

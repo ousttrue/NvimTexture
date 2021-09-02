@@ -402,7 +402,7 @@ public:
 
 public:
   static std::unique_ptr<DeviceImpl>
-  Create(const ComPtr<ID3D11Device2> &d3d_device) {
+  Create(const ComPtr<ID3D11Device> &d3d_device) {
 
     auto p = std::unique_ptr<DeviceImpl>(new DeviceImpl);
 
@@ -463,7 +463,7 @@ public:
 };
 
 class NvimRendererD2DImpl {
-  ComPtr<ID3D11Device2> _d3d_device;
+  ComPtr<ID3D11Device> _d3d_device;
   ComPtr<IDXGISurface2> _dxgi_backbuffer;
   std::unique_ptr<class DeviceImpl> _device;
   std::unique_ptr<class DWriteImpl> _dwrite;
@@ -473,9 +473,9 @@ class NvimRendererD2DImpl {
   const HighlightAttribute *_defaultHL = nullptr;
 
 public:
-  NvimRendererD2DImpl(const ComPtr<ID3D11Device2> &d3d_device, bool disable_ligatures,
-               float linespace_factor, uint32_t monitor_dpi,
-               const HighlightAttribute *defaultHL)
+  NvimRendererD2DImpl(const ComPtr<ID3D11Device> &d3d_device,
+                      bool disable_ligatures, float linespace_factor,
+                      uint32_t monitor_dpi, const HighlightAttribute *defaultHL)
       : _d3d_device(d3d_device),
         _dwrite(DWriteImpl::Create(disable_ligatures, linespace_factor,
                                    monitor_dpi)),
@@ -881,7 +881,8 @@ GlyphRenderer::DrawGlyphRun(
     DWRITE_GLYPH_RUN const *glyph_run,
     DWRITE_GLYPH_RUN_DESCRIPTION const *glyph_run_description,
     IUnknown *client_drawing_effect) noexcept {
-  auto renderer = reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
+  auto renderer =
+      reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
   return renderer->DrawGlyphRun(baseline_origin_x, baseline_origin_y,
                                 measuring_mode, glyph_run,
                                 glyph_run_description, client_drawing_effect);
@@ -892,25 +893,28 @@ HRESULT GlyphRenderer::DrawUnderline(void *client_drawing_context,
                                      float baseline_origin_y,
                                      DWRITE_UNDERLINE const *underline,
                                      IUnknown *client_drawing_effect) noexcept {
-  auto renderer = reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
+  auto renderer =
+      reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
   return renderer->DrawUnderline(baseline_origin_x, baseline_origin_y,
                                  underline, client_drawing_effect);
 }
 
 HRESULT GlyphRenderer::GetCurrentTransform(void *client_drawing_context,
                                            DWRITE_MATRIX *transform) noexcept {
-  auto renderer = reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
+  auto renderer =
+      reinterpret_cast<NvimRendererD2DImpl *>(client_drawing_context);
   return renderer->GetCurrentTransform(transform);
 }
 
 ///
 /// Renderer
 ///
-NvimRendererD2D::NvimRendererD2D(ID3D11Device2 *device, bool disable_ligatures,
-                   float linespace_factor, uint32_t monitor_dpi,
-                   const HighlightAttribute *defaultHL)
+NvimRendererD2D::NvimRendererD2D(ID3D11Device *device,
+                                 const HighlightAttribute *defaultHL,
+                                 bool disable_ligatures, float linespace_factor,
+                                 uint32_t monitor_dpi)
     : _impl(new NvimRendererD2DImpl(device, disable_ligatures, linespace_factor,
-                             monitor_dpi, defaultHL)) {}
+                                    monitor_dpi, defaultHL)) {}
 
 NvimRendererD2D::~NvimRendererD2D() { delete _impl; }
 
@@ -926,10 +930,12 @@ void NvimRendererD2D::DrawGridLine(const NvimGrid *grid, int row) {
   _impl->DrawGridLine(grid, row);
 }
 
-void NvimRendererD2D::DrawCursor(const NvimGrid *grid) { _impl->DrawCursor(grid); }
+void NvimRendererD2D::DrawCursor(const NvimGrid *grid) {
+  _impl->DrawCursor(grid);
+}
 
 void NvimRendererD2D::DrawBorderRectangles(const NvimGrid *grid, int width,
-                                    int height) {
+                                           int height) {
   _impl->DrawBorderRectangles(grid, width, height);
 }
 
@@ -938,7 +944,7 @@ void NvimRendererD2D::SetFont(std::string_view font, float size) {
 }
 
 void NvimRendererD2D::DrawBackgroundRect(int rows, int cols,
-                                  const HighlightAttribute *hl) {
+                                         const HighlightAttribute *hl) {
   _impl->DrawBackgroundRect(rows, cols, hl);
 }
 

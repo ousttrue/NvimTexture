@@ -7,9 +7,10 @@ class NvimRendererD2D : public NvimRenderer {
   class NvimRendererD2DImpl *_impl = nullptr;
 
 public:
-  NvimRendererD2D(struct ID3D11Device2 *device, bool disable_ligatures,
-           float linespace_factor, uint32_t monitor_dpi,
-           const HighlightAttribute *defaultHL);
+  NvimRendererD2D(struct ID3D11Device *device,
+                  const HighlightAttribute *defaultHL,
+                  bool disable_ligatures = false, float linespace_factor = 1.0f,
+                  uint32_t monitor_dpi = 96);
   ~NvimRendererD2D();
   void SetTarget(struct IDXGISurface2 *backbuffer);
   // font size

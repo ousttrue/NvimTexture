@@ -8,6 +8,7 @@ struct GridSize {
   bool operator==(const GridSize &rhs) const {
     return rows == rhs.rows && cols == rhs.cols;
   }
+  bool operator!=(const GridSize &rhs) const { return !(*this == rhs); }
 
   static GridSize FromWindowSize(int window_width, int window_height,
                                  int font_width, int font_height) {
