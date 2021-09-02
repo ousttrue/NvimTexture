@@ -142,6 +142,9 @@ public:
   }
 };
 
+using RenderTargetRenderer_t =
+    std::function<ID3D11ShaderResourceView *(int w, int h)>;
+
 class Gui {
   // Our state
   bool _show_demo_window = true;
@@ -201,7 +204,7 @@ public:
     ImGui::DestroyContext();
   }
 
-  void Render() {
+  void Render(const RenderTargetRenderer_t &callback) {
     // Start the Dear ImGui frame
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -259,6 +262,29 @@ public:
       ImGui::End();
     }
 
+    {
+      // View
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+      if (ImGui::Begin("render target", nullptr,
+                       ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoScrollWithMouse)) {
+        auto size = ImGui::GetContentRegionAvail();
+        auto pos = ImGui::GetWindowPos();
+        auto frameHeight = ImGui::GetFrameHeight();
+
+        // update view camera
+        // auto viewState =
+        //     windowState.Crop(pos.x, pos.y + frameHeight, size.x, size.y);
+        // auto renderTarget = view.Draw(deviceContext, viewState);
+        auto renderTarget =
+            callback(static_cast<int>(size.x), static_cast<int>(size.y));
+        ImGui::ImageButton((ImTextureID)renderTarget, size, ImVec2(0.0f, 0.0f),
+                           ImVec2(1.0f, 1.0f), 0);
+      }
+      ImGui::End();
+      ImGui::PopStyleVar();
+    }
+
     // Rendering
     ImGui::Render();
 
@@ -268,6 +294,52 @@ public:
     clear_color_with_alpha[3] = _clear_color.w;
 
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+  }
+};
+
+class Renderer {
+  ComPtr<ID3D11Device> _device;
+  ComPtr<ID3D11Texture2D> _texture;
+  ComPtr<ID3D11ShaderResourceView> _srv;
+  D3D11_TEXTURE2D_DESC _desc = {0};
+
+public:
+  Renderer(const ComPtr<ID3D11Device> &device) : _device(device) {}
+  ID3D11ShaderResourceView *Render(int w, int h) {
+    GetOrCreate(w, h);
+    return _srv.Get();
+  }
+
+private:
+  void GetOrCreate(int w, int h) {
+    if (_texture) {
+      if (_desc.Width == w && _desc.Height == h) {
+        return;
+      }
+    }
+
+    PLOGD << "srv: " << w << ", " << h;
+
+    _desc.Width = w;
+    _desc.Height = h;
+    _desc.MipLevels = 1;
+    _desc.ArraySize = 1;
+    _desc.Format = DXGI_FORMAT_B8G8R8X8_UNORM;
+    _desc.SampleDesc.Count = 1;
+    _desc.SampleDesc.Quality = 0;
+    _desc.Usage = D3D11_USAGE_DEFAULT;
+    _desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    auto hr = _device->CreateTexture2D(&_desc, nullptr, &_texture);
+    if (FAILED(hr)) {
+      assert(false);
+      return;
+    }
+
+    hr = _device->CreateShaderResourceView(_texture.Get(), nullptr, &_srv);
+    if (FAILED(hr)) {
+      assert(false);
+      return;
+    }
   }
 };
 
@@ -298,6 +370,7 @@ int main(int, char **) {
   if (!d3d.Create(hwnd)) {
     return 2;
   }
+  Renderer renderer(d3d._pd3dDevice);
 
   // Show the window
   ::ShowWindow(hwnd, SW_SHOWDEFAULT);
@@ -332,7 +405,8 @@ int main(int, char **) {
     d3d.PrepareBackbuffer(rect.right - rect.left, rect.bottom - rect.top,
                           gui.clear_color_with_alpha);
 
-    gui.Render();
+    gui.Render(std::bind(&Renderer::Render, &renderer, std::placeholders::_1,
+                         std::placeholders::_2));
     d3d.Present();
   }
 
