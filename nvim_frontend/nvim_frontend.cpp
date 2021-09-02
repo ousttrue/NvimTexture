@@ -301,6 +301,8 @@ void NvimFrontend::Mouse(const MouseEvent &e) {
   _impl->SendMouseInput(e.button, e.action, e.y, e.x);
 }
 
+void NvimFrontend::OpenFile(const wchar_t *file) { _impl->OpenFile(file); }
+
 const HighlightAttribute *NvimFrontend::DefaultAttribute() const {
   return _impl->DefaultAttribute();
 }

@@ -25,6 +25,7 @@ public:
   void Process();
   void Input(const InputEvent &e);
   void Mouse(const MouseEvent &e);
+  void OpenFile(const wchar_t *file);
 
   GridSize GridSize() const;
   bool Sizing() const;
