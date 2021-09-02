@@ -91,7 +91,7 @@ struct ThreadWork {
 
 class NvimFrontendImpl {
   NvimPipe _pipe;
-  NvimGrid _grid;
+  Nvim::Grid _grid;
   NvimRedraw _redraw;
   asio::io_context _context;
   msgpackpp::rpc_base<msgpackpp::WindowsPipeTransport> _rpc;
@@ -172,8 +172,8 @@ public:
     _rpc.write_async(msg);
   }
 
-  void SendMouseInput(MouseButton button, MouseAction action, int mouse_row,
-                      int mouse_col) {
+  void SendMouseInput(Nvim::MouseButton button, Nvim::MouseAction action,
+                      int mouse_row, int mouse_col) {
     bool ctrl_down = (GetKeyState(VK_CONTROL) & 0x80) != 0;
     bool shift_down = (GetKeyState(VK_SHIFT) & 0x80) != 0;
     bool alt_down = (GetKeyState(VK_MENU) & 0x80) != 0;
@@ -254,10 +254,12 @@ public:
     _rpc.request_async("nvim_command", (const char *)file_command);
   }
 
-  GridSize GridSize() const { return _grid.Size(); }
+  Nvim::GridSize GridSize() const { return _grid.Size(); }
   bool Sizing() const { return _redraw.Sizing(); }
   void SetSizing() { _redraw.SetSizing(); }
-  const HighlightAttribute *DefaultAttribute() const { return &_grid.hl(0); }
+  const Nvim::HighlightAttribute *DefaultAttribute() const {
+    return &_grid.hl(0);
+  }
 };
 
 NvimFrontend::NvimFrontend() : _impl(new NvimFrontendImpl) {}
@@ -278,18 +280,18 @@ std::tuple<std::string_view, float> NvimFrontend::Initialize() {
   return NvimRedraw::ParseGUIFont(guifont);
 }
 void NvimFrontend::Process() { _impl->Process(); }
-void NvimFrontend::Input(const InputEvent &e) {
+void NvimFrontend::Input(const Nvim::InputEvent &e) {
   switch (e.type) {
-  case InputEventTypes::Input:
+  case Nvim::InputEventTypes::Input:
     _impl->SendInput(e.input);
     break;
-  case InputEventTypes::ModifiedInput:
+  case Nvim::InputEventTypes::ModifiedInput:
     _impl->NvimSendModifiedInput(e.input, true);
     break;
-  case InputEventTypes::Char:
+  case Nvim::InputEventTypes::Char:
     _impl->SendChar(e.ch);
     break;
-  case InputEventTypes::SysChar:
+  case Nvim::InputEventTypes::SysChar:
     _impl->SendSysChar(e.ch);
     break;
   default:
@@ -297,15 +299,15 @@ void NvimFrontend::Input(const InputEvent &e) {
     break;
   }
 }
-void NvimFrontend::Mouse(const MouseEvent &e) {
+void NvimFrontend::Mouse(const Nvim::MouseEvent &e) {
   _impl->SendMouseInput(e.button, e.action, e.y, e.x);
 }
 
 void NvimFrontend::OpenFile(const wchar_t *file) { _impl->OpenFile(file); }
 
-const HighlightAttribute *NvimFrontend::DefaultAttribute() const {
+const Nvim::HighlightAttribute *NvimFrontend::DefaultAttribute() const {
   return _impl->DefaultAttribute();
 }
-GridSize NvimFrontend::GridSize() const { return _impl->GridSize(); }
+Nvim::GridSize NvimFrontend::GridSize() const { return _impl->GridSize(); }
 bool NvimFrontend::Sizing() const { return _impl->Sizing(); }
 void NvimFrontend::SetSizing() { return _impl->SetSizing(); }

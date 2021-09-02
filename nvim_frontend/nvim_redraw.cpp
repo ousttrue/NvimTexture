@@ -17,7 +17,7 @@ NvimRedraw::ParseGUIFont(std::string_view guifont) {
   return {guifont.substr(0, size_str), font_size};
 }
 
-void NvimRedraw::Dispatch(NvimGrid *grid, NvimRenderer *renderer,
+void NvimRedraw::Dispatch(Nvim::Grid *grid, NvimRenderer *renderer,
                           const msgpackpp::parser &params) {
   auto [w, h] = renderer->StartDraw();
 
@@ -93,7 +93,7 @@ void NvimRedraw::SetGuiOptions(NvimRenderer *renderer,
 }
 
 // ["grid_resize",[1,190,45]]
-void NvimRedraw::UpdateGridSize(NvimGrid *grid,
+void NvimRedraw::UpdateGridSize(Nvim::Grid *grid,
                                 const msgpackpp::parser &grid_resize) {
   auto grid_resize_params = grid_resize[1];
   int grid_cols = grid_resize_params[1].get_number<int>();
@@ -103,7 +103,7 @@ void NvimRedraw::UpdateGridSize(NvimGrid *grid,
 }
 
 // ["grid_cursor_goto",[1,0,4]]
-void NvimRedraw::UpdateCursorPos(NvimGrid *grid,
+void NvimRedraw::UpdateCursorPos(Nvim::Grid *grid,
                                  const msgpackpp::parser &cursor_goto) {
   auto cursor_goto_params = cursor_goto[1];
   auto row = cursor_goto_params[1].get_number<int>();
@@ -113,25 +113,25 @@ void NvimRedraw::UpdateCursorPos(NvimGrid *grid,
 
 // ["mode_info_set",[true,[{"mouse_shape":0...
 void NvimRedraw::UpdateCursorModeInfos(
-    NvimGrid *grid, const msgpackpp::parser &mode_info_set_params) {
+    Nvim::Grid *grid, const msgpackpp::parser &mode_info_set_params) {
   auto mode_info_params = mode_info_set_params[1];
   auto mode_infos = mode_info_params[1];
   size_t mode_infos_length = mode_infos.count();
-  assert(mode_infos_length <= MAX_CURSOR_MODE_INFOS);
+  assert(mode_infos_length <= Nvim::MAX_CURSOR_MODE_INFOS);
 
   for (size_t i = 0; i < mode_infos_length; ++i) {
     auto mode_info_map = mode_infos[i];
-    grid->SetCursorShape(i, CursorShape::None);
+    grid->SetCursorShape(i, Nvim::CursorShape::None);
 
     auto cursor_shape = mode_info_map["cursor_shape"];
     if (cursor_shape.is_string()) {
       auto cursor_shape_str = cursor_shape.get_string();
       if (cursor_shape_str == "block") {
-        grid->SetCursorShape(i, CursorShape::Block);
+        grid->SetCursorShape(i, Nvim::CursorShape::Block);
       } else if (cursor_shape_str == "vertical") {
-        grid->SetCursorShape(i, CursorShape::Vertical);
+        grid->SetCursorShape(i, Nvim::CursorShape::Vertical);
       } else if (cursor_shape_str == "horizontal") {
-        grid->SetCursorShape(i, CursorShape::Horizontal);
+        grid->SetCursorShape(i, Nvim::CursorShape::Horizontal);
       }
     }
 
@@ -145,14 +145,14 @@ void NvimRedraw::UpdateCursorModeInfos(
 }
 
 // ["mode_change",["normal",0]]
-void NvimRedraw::UpdateCursorMode(NvimGrid *grid,
+void NvimRedraw::UpdateCursorMode(Nvim::Grid *grid,
                                   const msgpackpp::parser &mode_change) {
   auto mode_change_params = mode_change[1];
   grid->SetCursorModeInfo(mode_change_params[1].get_number<int>());
 }
 
 // ["default_colors_set",[1.67772e+07,0,1.67117e+07,0,0]]
-void NvimRedraw::UpdateDefaultColors(NvimGrid *grid,
+void NvimRedraw::UpdateDefaultColors(Nvim::Grid *grid,
                                      const msgpackpp::parser &default_colors) {
   size_t default_colors_arr_length = default_colors.count();
   for (size_t i = 1; i < default_colors_arr_length; ++i) {
@@ -171,7 +171,7 @@ void NvimRedraw::UpdateDefaultColors(NvimGrid *grid,
 
 // ["hl_attr_define",[1,{},{},[]],[2,{"foreground":1.38823e+07,"background":1.1119e+07},{"for
 void NvimRedraw::UpdateHighlightAttributes(
-    NvimGrid *grid, const msgpackpp::parser &highlight_attribs) {
+    Nvim::Grid *grid, const msgpackpp::parser &highlight_attribs) {
   uint64_t attrib_count = highlight_attribs.count();
   for (uint64_t i = 1; i < attrib_count; ++i) {
     int64_t attrib_index = highlight_attribs[i][0].get_number<int>();
@@ -183,7 +183,7 @@ void NvimRedraw::UpdateHighlightAttributes(
       if (color_node.is_number()) {
         *color = color_node.get_number<uint32_t>();
       } else {
-        *color = DEFAULT_COLOR;
+        *color = Nvim::DEFAULT_COLOR;
       }
     };
     SetColor("foreground", &grid->hl(attrib_index).foreground);
@@ -191,7 +191,7 @@ void NvimRedraw::UpdateHighlightAttributes(
     SetColor("special", &grid->hl(attrib_index).special);
 
     const auto SetFlag = [&](const char *flag_name,
-                             HighlightAttributeFlags flag) {
+                             Nvim::HighlightAttributeFlags flag) {
       auto flag_node = attrib_map[flag_name];
       if (flag_node.is_bool()) {
         if (flag_node.get_bool()) {
@@ -201,18 +201,18 @@ void NvimRedraw::UpdateHighlightAttributes(
         }
       }
     };
-    SetFlag("reverse", HL_ATTRIB_REVERSE);
-    SetFlag("italic", HL_ATTRIB_ITALIC);
-    SetFlag("bold", HL_ATTRIB_BOLD);
-    SetFlag("strikethrough", HL_ATTRIB_STRIKETHROUGH);
-    SetFlag("underline", HL_ATTRIB_UNDERLINE);
-    SetFlag("undercurl", HL_ATTRIB_UNDERCURL);
+    SetFlag("reverse", Nvim::HL_ATTRIB_REVERSE);
+    SetFlag("italic", Nvim::HL_ATTRIB_ITALIC);
+    SetFlag("bold", Nvim::HL_ATTRIB_BOLD);
+    SetFlag("strikethrough", Nvim::HL_ATTRIB_STRIKETHROUGH);
+    SetFlag("underline", Nvim::HL_ATTRIB_UNDERLINE);
+    SetFlag("undercurl", Nvim::HL_ATTRIB_UNDERCURL);
   }
 }
 
 // ["grid_line",[1,50,193,[[" ",1]]],[1,49,193,[["4",218],["%"],[" "],["
 // ",215,2],["2"],["9"],[":"],["0"]]]]
-void NvimRedraw::DrawGridLines(NvimGrid *grid, NvimRenderer *renderer,
+void NvimRedraw::DrawGridLines(Nvim::Grid *grid, NvimRenderer *renderer,
                                const msgpackpp::parser &grid_lines) {
   int grid_size = grid->Count();
   size_t line_count = grid_lines.count();
@@ -292,7 +292,7 @@ void NvimRedraw::DrawGridLines(NvimGrid *grid, NvimRenderer *renderer,
   }
 }
 
-void NvimRedraw::ScrollRegion(NvimGrid *grid, NvimRenderer *renderer,
+void NvimRedraw::ScrollRegion(Nvim::Grid *grid, NvimRenderer *renderer,
                               const msgpackpp::parser &scroll_region) {
   PLOGD << scroll_region;
   auto scroll_region_params = scroll_region[1];

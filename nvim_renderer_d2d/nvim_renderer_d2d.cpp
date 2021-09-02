@@ -470,12 +470,12 @@ class NvimRendererD2DImpl {
 
   bool _draw_active = false;
 
-  const HighlightAttribute *_defaultHL = nullptr;
+  const Nvim::HighlightAttribute *_defaultHL = nullptr;
 
 public:
   NvimRendererD2DImpl(const ComPtr<ID3D11Device> &d3d_device,
                       bool disable_ligatures, float linespace_factor,
-                      uint32_t monitor_dpi, const HighlightAttribute *defaultHL)
+                      uint32_t monitor_dpi, const Nvim::HighlightAttribute *defaultHL)
       : _d3d_device(d3d_device),
         _dwrite(DWriteImpl::Create(disable_ligatures, linespace_factor,
                                    monitor_dpi)),
@@ -499,33 +499,33 @@ public:
   }
 
   void ApplyHighlightAttributes(IDWriteTextLayout *text_layout, int start,
-                                int end, const HighlightAttribute *hl_attribs) {
+                                int end, const Nvim::HighlightAttribute *hl_attribs) {
     ComPtr<GlyphDrawingEffect> drawing_effect;
     GlyphDrawingEffect::Create(hl_attribs->CreateForegroundColor(),
                                hl_attribs->CreateSpecialColor(),
                                &drawing_effect);
     DWRITE_TEXT_RANGE range{static_cast<uint32_t>(start),
                             static_cast<uint32_t>(end - start)};
-    if (hl_attribs->flags & HL_ATTRIB_ITALIC) {
+    if (hl_attribs->flags & Nvim::HL_ATTRIB_ITALIC) {
       text_layout->SetFontStyle(DWRITE_FONT_STYLE_ITALIC, range);
     }
-    if (hl_attribs->flags & HL_ATTRIB_BOLD) {
+    if (hl_attribs->flags & Nvim::HL_ATTRIB_BOLD) {
       text_layout->SetFontWeight(DWRITE_FONT_WEIGHT_BOLD, range);
     }
-    if (hl_attribs->flags & HL_ATTRIB_STRIKETHROUGH) {
+    if (hl_attribs->flags & Nvim::HL_ATTRIB_STRIKETHROUGH) {
       text_layout->SetStrikethrough(true, range);
     }
-    if (hl_attribs->flags & HL_ATTRIB_UNDERLINE) {
+    if (hl_attribs->flags & Nvim::HL_ATTRIB_UNDERLINE) {
       text_layout->SetUnderline(true, range);
     }
-    if (hl_attribs->flags & HL_ATTRIB_UNDERCURL) {
+    if (hl_attribs->flags & Nvim::HL_ATTRIB_UNDERCURL) {
       text_layout->SetUnderline(true, range);
     }
     text_layout->SetDrawingEffect(drawing_effect.Get(), range);
   }
 
   void DrawBackgroundRect(D2D1_RECT_F rect,
-                          const HighlightAttribute *hl_attribs) {
+                          const Nvim::HighlightAttribute *hl_attribs) {
     auto color = hl_attribs->CreateBackgroundColor();
     _device->_d2d_background_rect_brush->SetColor(D2D1::ColorF(color));
     _device->_d2d_context->FillRectangle(
@@ -533,19 +533,19 @@ public:
   }
 
   D2D1_RECT_F GetCursorForegroundRect(D2D1_RECT_F cursor_bg_rect,
-                                      CursorShape shape) {
+                                      Nvim::CursorShape shape) {
     switch (shape) {
-    case CursorShape::None: {
+    case Nvim::CursorShape::None: {
       return cursor_bg_rect;
     }
-    case CursorShape::Block: {
+    case Nvim::CursorShape::Block: {
       return cursor_bg_rect;
     }
-    case CursorShape::Vertical: {
+    case Nvim::CursorShape::Vertical: {
       cursor_bg_rect.right = cursor_bg_rect.left + 2;
       return cursor_bg_rect;
     }
-    case CursorShape::Horizontal: {
+    case Nvim::CursorShape::Horizontal: {
       cursor_bg_rect.top = cursor_bg_rect.bottom - 2;
       return cursor_bg_rect;
     }
@@ -555,7 +555,7 @@ public:
 
   void DrawHighlightedText(D2D1_RECT_F rect, const wchar_t *text,
                            uint32_t length,
-                           const HighlightAttribute *hl_attribs) {
+                           const Nvim::HighlightAttribute *hl_attribs) {
     auto text_layout = _dwrite->GetTextLayout(rect, text, length);
     this->ApplyHighlightAttributes(text_layout.Get(), 0, 1, hl_attribs);
 
@@ -566,7 +566,7 @@ public:
     _device->_d2d_context->PopAxisAlignedClip();
   }
 
-  void DrawGridLine(const NvimGrid *grid, int row) {
+  void DrawGridLine(const Nvim::Grid *grid, int row) {
     auto cols = grid->Cols();
     int base = row * cols;
 
@@ -634,7 +634,7 @@ public:
     _device->_d2d_context->PopAxisAlignedClip();
   }
 
-  void DrawCursor(const NvimGrid *grid) {
+  void DrawCursor(const Nvim::Grid *grid) {
     int cursor_grid_offset = grid->CursorOffset();
 
     int double_width_char_factor = 1;
@@ -645,7 +645,7 @@ public:
 
     auto cursor_hl_attribs = grid->hl(grid->CursorModeHighlightAttribute());
     if (grid->CursorModeHighlightAttribute() == 0) {
-      cursor_hl_attribs.flags ^= HL_ATTRIB_REVERSE;
+      cursor_hl_attribs.flags ^= Nvim::HL_ATTRIB_REVERSE;
     }
 
     D2D1_RECT_F cursor_rect{grid->CursorCol() * _dwrite->_font_width,
@@ -658,14 +658,14 @@ public:
         this->GetCursorForegroundRect(cursor_rect, grid->GetCursorShape());
     this->DrawBackgroundRect(cursor_fg_rect, &cursor_hl_attribs);
 
-    if (grid->GetCursorShape() == CursorShape::Block) {
+    if (grid->GetCursorShape() == Nvim::CursorShape::Block) {
       this->DrawHighlightedText(cursor_fg_rect,
                                 &grid->Chars()[cursor_grid_offset],
                                 double_width_char_factor, &cursor_hl_attribs);
     }
   }
 
-  void DrawBorderRectangles(const NvimGrid *grid, int width, int height) {
+  void DrawBorderRectangles(const Nvim::Grid *grid, int width, int height) {
 
     // auto size = _d2d_target_bitmap->GetPixelSize();
     // auto width = size.width;
@@ -687,7 +687,7 @@ public:
     }
   }
 
-  void DrawBackgroundRect(int rows, int cols, const HighlightAttribute *hl) {
+  void DrawBackgroundRect(int rows, int cols, const Nvim::HighlightAttribute *hl) {
     D2D1_RECT_F rect{0.0f, 0.0f, cols * _dwrite->_font_width,
                      rows * _dwrite->_font_height};
     this->DrawBackgroundRect(rect, hl);
@@ -910,7 +910,7 @@ HRESULT GlyphRenderer::GetCurrentTransform(void *client_drawing_context,
 /// Renderer
 ///
 NvimRendererD2D::NvimRendererD2D(ID3D11Device *device,
-                                 const HighlightAttribute *defaultHL,
+                                 const Nvim::HighlightAttribute *defaultHL,
                                  bool disable_ligatures, float linespace_factor,
                                  uint32_t monitor_dpi)
     : _impl(new NvimRendererD2DImpl(device, disable_ligatures, linespace_factor,
@@ -926,15 +926,15 @@ std::tuple<float, float> NvimRendererD2D::FontSize() const {
   return _impl->FontSize();
 }
 
-void NvimRendererD2D::DrawGridLine(const NvimGrid *grid, int row) {
+void NvimRendererD2D::DrawGridLine(const Nvim::Grid *grid, int row) {
   _impl->DrawGridLine(grid, row);
 }
 
-void NvimRendererD2D::DrawCursor(const NvimGrid *grid) {
+void NvimRendererD2D::DrawCursor(const Nvim::Grid *grid) {
   _impl->DrawCursor(grid);
 }
 
-void NvimRendererD2D::DrawBorderRectangles(const NvimGrid *grid, int width,
+void NvimRendererD2D::DrawBorderRectangles(const Nvim::Grid *grid, int width,
                                            int height) {
   _impl->DrawBorderRectangles(grid, width, height);
 }
@@ -944,7 +944,7 @@ void NvimRendererD2D::SetFont(std::string_view font, float size) {
 }
 
 void NvimRendererD2D::DrawBackgroundRect(int rows, int cols,
-                                         const HighlightAttribute *hl) {
+                                         const Nvim::HighlightAttribute *hl) {
   _impl->DrawBackgroundRect(rows, cols, hl);
 }
 

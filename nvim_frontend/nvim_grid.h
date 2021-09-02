@@ -1,9 +1,37 @@
 #pragma once
-#include "grid_size.h"
 #include <functional>
 #include <list>
 #include <stdint.h>
 #include <vector>
+
+namespace Nvim {
+struct GridSize {
+  int rows;
+  int cols;
+
+  bool operator==(const GridSize &rhs) const {
+    return rows == rhs.rows && cols == rhs.cols;
+  }
+  bool operator!=(const GridSize &rhs) const { return !(*this == rhs); }
+
+  static GridSize FromWindowSize(int window_width, int window_height,
+                                 int font_width, int font_height) {
+    return GridSize{static_cast<int>(window_height / font_height),
+                    static_cast<int>(window_width / font_width)};
+  }
+};
+using GridSizeChanged = std::function<void(const GridSize &)>;
+constexpr int MAX_CURSOR_MODE_INFOS = 64;
+
+struct GridPoint {
+  int row;
+  int col;
+
+  static GridPoint FromCursor(int x, int y, int font_width, int font_height) {
+    return GridPoint{static_cast<int>(y / font_height),
+                     static_cast<int>(x / font_width)};
+  }
+};
 
 enum HighlightAttributeFlags : uint16_t {
   HL_ATTRIB_REVERSE = 1 << 0,
@@ -69,7 +97,7 @@ struct CellProperty {
   bool is_wide_char;
 };
 
-class NvimGrid {
+class Grid {
   GridSize _size = {};
   std::vector<wchar_t> _grid_chars;
   std::vector<CellProperty> _grid_cell_properties;
@@ -79,10 +107,10 @@ class NvimGrid {
   HighlightAttributes _hl;
 
 public:
-  NvimGrid();
-  ~NvimGrid();
-  NvimGrid(const NvimGrid &) = delete;
-  NvimGrid &operator=(const NvimGrid &) = delete;
+  Grid();
+  ~Grid();
+  Grid(const Grid &) = delete;
+  Grid &operator=(const Grid &) = delete;
   int Rows() const { return _size.rows; }
   int Cols() const { return _size.cols; }
   GridSize Size() const { return _size; }
@@ -125,3 +153,5 @@ public:
   HighlightAttribute &hl(size_t index) { return _hl[index]; }
   const HighlightAttribute &hl(size_t index) const { return _hl[index]; }
 };
+
+} // namespace Nvim

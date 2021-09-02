@@ -1,5 +1,5 @@
 #pragma once
-#include "grid_size.h"
+#include "nvim_grid.h"
 #include "nvim_input.h"
 #include <functional>
 #include <string>
@@ -23,13 +23,13 @@ public:
   void ResizeGrid(int rows, int cols);
 
   void Process();
-  void Input(const InputEvent &e);
-  void Mouse(const MouseEvent &e);
+  void Input(const Nvim::InputEvent &e);
+  void Mouse(const Nvim::MouseEvent &e);
   void OpenFile(const wchar_t *file);
 
-  GridSize GridSize() const;
+  Nvim::GridSize GridSize() const;
   bool Sizing() const;
   void SetSizing();
 
-  const struct HighlightAttribute *DefaultAttribute() const;
+  const Nvim::HighlightAttribute *DefaultAttribute() const;
 };

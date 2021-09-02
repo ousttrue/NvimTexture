@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+namespace Nvim {
+
 enum class InputEventTypes {
   Input,
   Char,
@@ -100,3 +102,5 @@ constexpr const char *GetMouseAction(MouseAction action) {
     return nullptr;
   }
 }
+
+} // namespace Nvim

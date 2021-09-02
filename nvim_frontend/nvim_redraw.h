@@ -6,10 +6,14 @@ namespace msgpackpp {
 class parser;
 }
 
+namespace Nvim {
+class Grid;
+}
+
 struct NvimRedraw {
   bool _ui_busy = false;
 
-  void Dispatch(class NvimGrid *grid, class NvimRenderer *renderer,
+  void Dispatch(Nvim::Grid *grid, class NvimRenderer *renderer,
                 const msgpackpp::parser &params);
   static std::tuple<std::string_view, float>
   ParseGUIFont(std::string_view gui_font);
@@ -21,17 +25,17 @@ struct NvimRedraw {
 private:
   void SetGuiOptions(class NvimRenderer *renderer,
                      const msgpackpp::parser &option_set);
-  void UpdateGridSize(NvimGrid *grid, const msgpackpp::parser &grid_resize);
-  void UpdateCursorPos(NvimGrid *grid, const msgpackpp::parser &cursor_goto);
-  void UpdateCursorModeInfos(NvimGrid *grid,
+  void UpdateGridSize(Nvim::Grid *grid, const msgpackpp::parser &grid_resize);
+  void UpdateCursorPos(Nvim::Grid *grid, const msgpackpp::parser &cursor_goto);
+  void UpdateCursorModeInfos(Nvim::Grid *grid,
                              const msgpackpp::parser &mode_info_set_params);
-  void UpdateCursorMode(NvimGrid *grid, const msgpackpp::parser &mode_change);
-  void UpdateDefaultColors(NvimGrid *grid,
+  void UpdateCursorMode(Nvim::Grid *grid, const msgpackpp::parser &mode_change);
+  void UpdateDefaultColors(Nvim::Grid *grid,
                            const msgpackpp::parser &default_colors);
-  void UpdateHighlightAttributes(NvimGrid *grid,
+  void UpdateHighlightAttributes(Nvim::Grid *grid,
                                  const msgpackpp::parser &highlight_attribs);
-  void DrawGridLines(NvimGrid *grid, NvimRenderer *renderer,
+  void DrawGridLines(Nvim::Grid *grid, NvimRenderer *renderer,
                      const msgpackpp::parser &grid_lines);
-  void ScrollRegion(NvimGrid *grid, NvimRenderer *renderer,
+  void ScrollRegion(Nvim::Grid *grid, NvimRenderer *renderer,
                     const msgpackpp::parser &scroll_region);
 };
