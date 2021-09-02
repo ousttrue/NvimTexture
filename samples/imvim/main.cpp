@@ -280,9 +280,10 @@ int main(int, char **) {
   // launch nvim
   //
   NvimFrontend nvim;
-  if (!nvim.Launch()) {
+  if (!nvim.Launch(L"nvim --embed", []() { PLOGD << "nvim terminated"; })) {
     return 3;
   }
+  auto [font, size] = nvim.Initialize();
 
   //
   // create window
@@ -303,8 +304,6 @@ int main(int, char **) {
   ::UpdateWindow(hwnd);
 
   Gui gui(hwnd, d3d._pd3dDevice.Get(), d3d._pd3dDeviceContext.Get());
-
-  nvim.Attach();
 
   // Main loop
   bool done = false;
