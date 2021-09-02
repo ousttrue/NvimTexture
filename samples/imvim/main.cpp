@@ -150,6 +150,8 @@ public:
 using RenderTargetRenderer_t =
     std::function<ID3D11ShaderResourceView *(int w, int h)>;
 
+using Input_t = std::function<void(const InputEvent &e)>;
+
 class Gui {
   // Our state
   bool _show_demo_window = true;
@@ -209,7 +211,64 @@ public:
     ImGui::DestroyContext();
   }
 
-  void Render(const RenderTargetRenderer_t &callback) {
+  bool m_key[512] = {0};
+
+  bool try_get_vk_map(int src, int *dst, bool shift) {
+    switch (src) {
+    case VK_OEM_1:
+      *dst = shift ? ':' : ';';
+      return true;
+    case VK_OEM_4:
+      *dst = shift ? '{' : '[';
+      return true;
+    case VK_OEM_6:
+      *dst = shift ? '}' : ']';
+      return true;
+    }
+    return false;
+  }
+
+  void Input(const bool key[512], const Input_t &input) {
+    const int SHIFT = 16;
+    const int CTRL = 17;
+
+    auto is_shift = key[SHIFT];
+    auto is_ctrl = key[CTRL];
+    for (int i = 0; i < 512; ++i) {
+      auto value = key[i];
+      if (m_key[i] != value) {
+        m_key[i] = value;
+        if (value) {
+          if (isalpha(i)) {
+            if (is_ctrl) {
+              input(InputEvent::create_modified((const char *)&i));
+            } else {
+              if (is_shift) {
+                // upper case
+                input(InputEvent::create_char(i));
+              } else {
+                // lower case
+                input(InputEvent::create_char(i + 0x20));
+              }
+            }
+          } else {
+
+            if (try_get_vk_map(i, &i, is_shift)) {
+              if (is_ctrl) {
+                input(InputEvent::create_modified((const char *)&i));
+              } else {
+                input(InputEvent::create_char(i));
+              }
+            } else {
+              PLOGD << "key: " << i;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  void Render(const RenderTargetRenderer_t &render, const Input_t &input) {
     // Start the Dear ImGui frame
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -273,18 +332,21 @@ public:
       if (ImGui::Begin("render target", nullptr,
                        ImGuiWindowFlags_NoScrollbar |
                            ImGuiWindowFlags_NoScrollWithMouse)) {
+
+        if (ImGui::IsWindowFocused()) {
+          Input(ImGui::GetIO().KeysDown, input);
+        }
+
         auto size = ImGui::GetContentRegionAvail();
         auto pos = ImGui::GetWindowPos();
         auto frameHeight = ImGui::GetFrameHeight();
 
-        // update view camera
-        // auto viewState =
-        //     windowState.Crop(pos.x, pos.y + frameHeight, size.x, size.y);
-        // auto renderTarget = view.Draw(deviceContext, viewState);
         auto renderTarget =
-            callback(static_cast<int>(size.x), static_cast<int>(size.y));
-        ImGui::ImageButton((ImTextureID)renderTarget, size, ImVec2(0.0f, 0.0f),
-                           ImVec2(1.0f, 1.0f), 0);
+            render(static_cast<int>(size.x), static_cast<int>(size.y));
+        if (renderTarget) {
+          ImGui::ImageButton((ImTextureID)renderTarget, size,
+                             ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), 0);
+        }
       }
       ImGui::End();
       ImGui::PopStyleVar();
@@ -353,6 +415,8 @@ public:
 
     return _srv.Get();
   }
+
+  void Input(const InputEvent &e) { _nvim.Input(e); }
 
 private:
   void GetOrCreate(int w, int h) {
@@ -449,7 +513,8 @@ int main(int, char **) {
                           gui.clear_color_with_alpha);
 
     gui.Render(std::bind(&Renderer::Render, &renderer, std::placeholders::_1,
-                         std::placeholders::_2));
+                         std::placeholders::_2),
+               std::bind(&Renderer::Input, &renderer, std::placeholders::_1));
     d3d.Present();
   }
 
