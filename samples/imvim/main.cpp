@@ -12,40 +12,61 @@
 #include <nvim_frontend.h>
 #include <nvim_grid.h>
 #include <nvim_renderer_d2d.h>
+#include <nvim_win32_key_processor.h>
 #include <plog/Appenders/DebugOutputAppender.h>
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Init.h>
 #include <plog/Log.h>
 #include <tchar.h>
 #include <wrl/client.h>
-//
-#include <nvim_vk_map.h>
 
 template <class T> using ComPtr = Microsoft::WRL::ComPtr<T>;
 
 // Forward declare message handler from imgui_impl_win32.cpp
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd,
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd,
                                                              UINT msg,
-                                                             WPARAM wParam,
-                                                             LPARAM lParam);
+                                                             WPARAM wparam,
+                                                             LPARAM lparam);
+
+NvimWin32KeyProcessor g_nvimKey;
 
 // Win32 message handler
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-  if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+LRESULT WINAPI WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+  if (msg == WM_CREATE) {
+    auto createStruct = reinterpret_cast<LPCREATESTRUCT>(lparam);
+    SetWindowLongPtr(hwnd, GWLP_USERDATA,
+                     reinterpret_cast<LONG_PTR>(createStruct->lpCreateParams));
+    return 0;
+  }
+
+  auto p = GetWindowLongPtr(hwnd, GWLP_USERDATA);
+  if (p) {
+    auto nvim = reinterpret_cast<NvimFrontend *>(p);
+    uint64_t out;
+    if (g_nvimKey.ProcessMessage(
+            hwnd, msg, wparam, lparam,
+            [nvim](const Nvim::InputEvent &input) { nvim->Input(input); },
+            &out)) {
+      // TODO: require nvim focus control
+      // return out;
+    }
+  }
+
+  if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
     return true;
 
   switch (msg) {
   case WM_SIZE:
     return 0;
   case WM_SYSCOMMAND:
-    if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
+    if ((wparam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
       return 0;
     break;
   case WM_DESTROY:
     ::PostQuitMessage(0);
     return 0;
   }
-  return ::DefWindowProc(hWnd, msg, wParam, lParam);
+  return ::DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
 class Win32Window {
@@ -57,17 +78,16 @@ public:
     ::DestroyWindow(_hwnd);
     ::UnregisterClass(_wc.lpszClassName, _wc.hInstance);
   }
-  HWND Create() {
+  HWND Create(void *p) {
     // Create application window
     // ImGui_ImplWin32_EnableDpiAwareness();
     _wc = {sizeof(WNDCLASSEX),    CS_CLASSDC, WndProc, 0L,   0L,
            GetModuleHandle(NULL), NULL,       NULL,    NULL, NULL,
            _T("ImGui Example"),   NULL};
     ::RegisterClassEx(&_wc);
-    _hwnd =
-        ::CreateWindow(_wc.lpszClassName, _T("Dear ImGui DirectX11 Example"),
-                       WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL,
-                       _wc.hInstance, NULL);
+    _hwnd = ::CreateWindow(
+        _wc.lpszClassName, _T("Dear ImGui DirectX11 Example"),
+        WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, NULL, NULL, _wc.hInstance, p);
 
     return _hwnd;
   }
@@ -214,68 +234,6 @@ public:
     ImGui::DestroyContext();
   }
 
-  bool m_key[512] = {0};
-
-  const char *my_translate(int src, bool shift) {
-    switch (src) {
-    case VK_OEM_1:
-      return shift ? ":" : ";";
-    case VK_OEM_4:
-      return shift ? "{" : "[";
-    case VK_OEM_6:
-      return shift ? "}" : "]";
-    }
-    return nullptr;
-  }
-
-  void Input(const bool key[512], const Input_t &input) {
-    const int SHIFT = 16;
-    const int CTRL = 17;
-
-    auto is_shift = key[SHIFT];
-    auto is_ctrl = key[CTRL];
-    for (int i = 0; i < 512; ++i) {
-      auto value = key[i];
-      if (m_key[i] != value) {
-        m_key[i] = value;
-        if (value) {
-          if (isalpha(i)) {
-            if (is_ctrl) {
-              input(Nvim::InputEvent::create_modified((const char *)&i));
-            } else {
-              if (is_shift) {
-                // upper case
-                input(Nvim::InputEvent::create_char(i));
-              } else {
-                // lower case
-                input(Nvim::InputEvent::create_char(i + 0x20));
-              }
-            }
-          } else {
-
-            if (auto key = Nvim_VK_Map(i, is_ctrl)) {
-              input(Nvim::InputEvent::create_modified(key));
-            } else {
-              auto t = my_translate(i, is_shift);
-              if (t) {
-                if (is_ctrl) {
-                  input(Nvim::InputEvent::create_modified(t));
-                } else {
-                  input(Nvim::InputEvent::create_input(t));
-                }
-              } else {
-                if (i == ' ') {
-                  input(Nvim::InputEvent::create_input(" "));
-                }
-                PLOGD << "key: " << i;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
   void Render(const RenderTargetRenderer_t &render, const Input_t &input) {
     // Start the Dear ImGui frame
     ImGui_ImplDX11_NewFrame();
@@ -342,7 +300,7 @@ public:
                            ImGuiWindowFlags_NoScrollWithMouse)) {
 
         if (ImGui::IsWindowFocused()) {
-          Input(ImGui::GetIO().KeysDown, input);
+          // Input(ImGui::GetIO().KeysDown, input);
         }
 
         auto size = ImGui::GetContentRegionAvail();
@@ -477,7 +435,7 @@ int main(int, char **) {
   // create window
   //
   Win32Window window;
-  auto hwnd = window.Create();
+  auto hwnd = window.Create(&nvim);
   if (!hwnd) {
     return 1;
   }
@@ -507,7 +465,7 @@ int main(int, char **) {
     // flags.
     MSG msg;
     while (::PeekMessage(&msg, NULL, 0U, 0U, PM_REMOVE)) {
-      ::TranslateMessage(&msg);
+      // ::TranslateMessage(&msg);
       ::DispatchMessage(&msg);
       if (msg.message == WM_QUIT)
         done = true;

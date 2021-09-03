@@ -5,4 +5,4 @@ NeoVim frontend based Nvy
 
 # TODO
 
-* [ ] keyboard event to nvim
+* [x] keyboard event to nvim

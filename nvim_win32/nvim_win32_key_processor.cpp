@@ -159,12 +159,12 @@ bool NvimWin32KeyProcessor::ProcessMessage(
     } else {
       LONG msg_pos = GetMessagePos();
       POINTS pt = MAKEPOINTS(msg_pos);
-      MSG current_msg{.hwnd = (HWND)hwnd,
-                      .message = msg,
-                      .wParam = wparam,
-                      .lParam = (LPARAM)lparam,
-                      .time = static_cast<DWORD>(GetMessageTime()),
-                      .pt = POINT{pt.x, pt.y}};
+      MSG current_msg{(HWND)hwnd,
+                      msg,
+                      wparam,
+                      (LPARAM)lparam,
+                      static_cast<DWORD>(GetMessageTime()),
+                      POINT{pt.x, pt.y}};
 
       if (_dead_char_pending) {
         if (static_cast<int>(wparam) == VK_SPACE ||
