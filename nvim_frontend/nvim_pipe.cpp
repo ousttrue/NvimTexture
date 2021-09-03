@@ -38,35 +38,45 @@ NvimPipe::~NvimPipe() {
   }
 }
 
+// wchar_t command_line[] = L"nvim --embed";
 bool NvimPipe::Launch(const wchar_t *command_line,
                       const on_terminated_t &callback) {
-  SECURITY_ATTRIBUTES sec_attribs = {0};
-  sec_attribs.nLength = sizeof(SECURITY_ATTRIBUTES);
+  SECURITY_ATTRIBUTES sec_attribs = {sizeof(SECURITY_ATTRIBUTES)};
   sec_attribs.bInheritHandle = true;
   if (!CreatePipe(&_stdin_read, &_stdin_write, &sec_attribs, 0)) {
+    PLOGE << "(nvim) fail to CreatePipe for stdin";
     return false;
   }
   if (!CreatePipe(&_stdout_read, &_stdout_write, &sec_attribs, 0)) {
+    PLOGE << "(nvim) fail to CreatePipe for stdout";
     return false;
   }
 
-  STARTUPINFOW startup_info = {0};
-  startup_info.cb = sizeof(STARTUPINFO);
+  STARTUPINFOW startup_info = {sizeof(STARTUPINFOW)};
   startup_info.dwFlags = STARTF_USESTDHANDLES;
   startup_info.hStdInput = _stdin_read;
   startup_info.hStdOutput = _stdout_write;
   startup_info.hStdError = _stdout_write;
-
-  // wchar_t command_line[] = L"nvim --embed";
   if (!CreateProcessW(nullptr, std::wstring(command_line).data(), nullptr,
                       nullptr, true, CREATE_NO_WINDOW, nullptr, nullptr,
                       &startup_info, &_process_info)) {
+    PLOGE << "(nvim) fail to CreateProcess";
+
+    LPVOID lpvMessageBuffer;
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+                  NULL, GetLastError(),
+                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                  (LPTSTR)&lpvMessageBuffer, 0, NULL);
+    PLOGE << (const char *)lpvMessageBuffer;
+    LocalFree(lpvMessageBuffer);
+
     return false;
   }
+
   _watch = std::thread([callback]() {
     WaitForSingleObject(_process_info.hProcess, INFINITE);
     callback();
-    PLOGD << "nvim terminated";
+    PLOGD << "(nvim) terminated";
   });
 
   HANDLE job_object = CreateJobObjectW(nullptr, nullptr);
