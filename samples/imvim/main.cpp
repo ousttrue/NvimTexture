@@ -426,10 +426,6 @@ int main(int, char **) {
   // launch nvim
   //
   NvimFrontend nvim;
-  if (!nvim.Launch(L"nvim --embed", []() { PLOGD << "nvim terminated"; })) {
-    return 3;
-  }
-  auto [font, size] = nvim.Initialize();
 
   //
   // create window
@@ -439,6 +435,15 @@ int main(int, char **) {
   if (!hwnd) {
     return 1;
   }
+
+  if (!nvim.Launch(L"nvim --embed", [hwnd]() {
+        PLOGD << "nvim terminated";
+        PostMessage(hwnd, WM_DESTROY, 0, 0);
+      })) {
+    return 3;
+  }
+  auto [font, size] = nvim.Initialize();
+
   // Show the window
   ::ShowWindow(hwnd, SW_SHOWDEFAULT);
   ::UpdateWindow(hwnd);
