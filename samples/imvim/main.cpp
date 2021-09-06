@@ -9,10 +9,12 @@
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
+#include <imgui_internal.h>
 #include <nvim_frontend.h>
 #include <nvim_grid.h>
 #include <nvim_renderer_d2d.h>
 #include <nvim_win32_key_processor.h>
+#include <optional>
 #include <plog/Appenders/DebugOutputAppender.h>
 #include <plog/Formatters/TxtFormatter.h>
 #include <plog/Init.h>
@@ -175,11 +177,104 @@ using RenderTargetRenderer_t =
 
 using Input_t = std::function<void(const Nvim::InputEvent &e)>;
 
+struct DockNode {
+  std::string name;
+  ImGuiDir dir = {};
+  float fraction = 0.5f;
+  std::vector<DockNode> children;
+
+  ImGuiID id = {};
+
+  void split();
+};
+
+void DockNode::split() {
+  ImGui::DockBuilderDockWindow(name.c_str(), id);
+  if (!children.empty()) {
+    auto &first = children.front();
+    auto &second = children.back();
+    ImGui::DockBuilderSplitNode(id, dir, fraction, &first.id, &second.id);
+    first.split();
+    second.split();
+  }
+}
+
+auto LEFT = "LEFT";
+auto CENTER = "CENTER";
+auto RIGHT = "RIGHT";
+
+class DockingSpace {
+  ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
+  bool _first_time = true;
+
+  DockNode _layout_root = {
+      "Root",
+      ImGuiDir_Left,
+      0.3f,
+      {
+          {LEFT},
+          {"Right", ImGuiDir_Right, 0.4f, {{RIGHT}, {CENTER}}},
+      }};
+
+public:
+  DockingSpace() {}
+
+  void Initialize() {
+    // enable
+    ImGuiIO &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  }
+
+  void Draw() {
+
+    ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+
+    const ImGuiViewport *viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+    window_flags |=
+        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+    ImGui::Begin("DockSpace", nullptr, window_flags);
+    ImGui::PopStyleVar(3);
+
+    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+
+    // menubar
+    if (ImGui::BeginMenuBar()) {
+      ImGui::EndMenuBar();
+    }
+
+    if (_first_time) {
+      // layout dock nodes
+      _first_time = false;
+
+      ImGui::DockBuilderRemoveNode(dockspace_id); // clear any previous layout
+      _layout_root.id = ImGui::DockBuilderAddNode(
+          dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+
+      ImGui::DockBuilderSetNodeSize(_layout_root.id, viewport->Size);
+
+      _layout_root.split();
+    }
+
+    ImGui::End();
+  }
+};
+
 class Gui {
   // Our state
-  bool _show_demo_window = true;
-  bool _show_another_window = false;
   ImVec4 _clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+  DockingSpace _dock_space;
 
 public:
   float clear_color_with_alpha[4] = {0};
@@ -193,6 +288,8 @@ public:
     // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable
     // Keyboard Controls io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; //
     // Enable Gamepad Controls
+
+    _dock_space.Initialize();
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -240,11 +337,7 @@ public:
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    // 1. Show the big demo window (Most of the sample code is in
-    // ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear
-    // ImGui!).
-    if (_show_demo_window)
-      ImGui::ShowDemoWindow(&_show_demo_window);
+    _dock_space.Draw();
 
     // 2. Show a simple window that we create ourselves. We use a Begin/End pair
     // to created a named window.
@@ -252,16 +345,11 @@ public:
       static float f = 0.0f;
       static int counter = 0;
 
-      ImGui::Begin("Hello, world!"); // Create a window called "Hello, world!"
-                                     // and append into it.
+      ImGui::Begin(LEFT); // Create a window called "Hello, world!"
+                          // and append into it.
 
       ImGui::Text("This is some useful text."); // Display some text (you can
                                                 // use a format strings too)
-      ImGui::Checkbox(
-          "Demo Window",
-          &_show_demo_window); // Edit bools storing our window open/close state
-      ImGui::Checkbox("Another Window", &_show_another_window);
-
       ImGui::SliderFloat("float", &f, 0.0f,
                          1.0f); // Edit 1 float using a slider from 0.0f to 1.0f
       ImGui::ColorEdit3(
@@ -280,22 +368,18 @@ public:
     }
 
     // 3. Show another simple window.
-    if (_show_another_window) {
-      ImGui::Begin(
-          "Another Window",
-          &_show_another_window); // Pass a pointer to our bool variable (the
-                                  // window will have a closing button that will
-                                  // clear the bool when clicked)
+    {
+      ImGui::Begin(RIGHT); // Pass a pointer to our bool variable (the
+                           // window will have a closing button that will
+                           // clear the bool when clicked)
       ImGui::Text("Hello from another window!");
-      if (ImGui::Button("Close Me"))
-        _show_another_window = false;
       ImGui::End();
     }
 
     {
       // View
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-      if (ImGui::Begin("render target", nullptr,
+      if (ImGui::Begin(CENTER, nullptr,
                        ImGuiWindowFlags_NoScrollbar |
                            ImGuiWindowFlags_NoScrollWithMouse)) {
 
